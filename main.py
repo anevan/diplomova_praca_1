@@ -53,7 +53,7 @@ def main():
     ###
     # If no paths were returned
     if not paths or not isinstance(paths, list) or len(paths) == 0:
-        print(f"⚠️No path found from '{in_col}' to '{out_col}' — nodes may be disconnected.")
+        print(f"No path found from '{in_col}' to '{out_col}' — nodes may be disconnected.")
         return
     ###
     # If multiple paths exist, pick the one with the highest score

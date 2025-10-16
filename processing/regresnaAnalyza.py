@@ -6,20 +6,23 @@ from sklearn.tree import DecisionTreeRegressor
 
 def smape(y_true, y_pred):
     denominator = (np.abs(y_true) + np.abs(y_pred)) / 2
-    return np.mean(np.abs(y_pred - y_true) / denominator) * 100
+    mask = denominator != 0
+    return np.mean(np.abs(y_pred[mask] - y_true[mask]) / denominator[mask]) * 100
 
 
 def multi_model_chain_predict(df, path, frac=0.3, max_depth=5):
     predictions = {}
     error_metrics = {}
 
-    x_pred = df[path[0]].values
+    x_pred_loess = df[path[0]].values
+    x_pred_svr = df[path[0]].values
+    x_pred_cart = df[path[0]].values
 
     for i in range(1, len(path)):
         y = df[path[i]].values
-        x = x_pred.reshape(-1, 1)
 
-        # LOESS
+        # --- LOESS ---
+        x = x_pred_loess.reshape(-1, 1)
         sort_idx = np.argsort(x.ravel())
         x_sorted = x.ravel()[sort_idx]
         y_sorted = y[sort_idx]
@@ -27,29 +30,25 @@ def multi_model_chain_predict(df, path, frac=0.3, max_depth=5):
         loess_preds = np.empty_like(loess_result)
         loess_preds[sort_idx] = loess_result
 
-        # SVR
+        # --- SVR ---
+        x = x_pred_svr.reshape(-1, 1)
         svr = SVR(kernel='rbf')
         svr.fit(x, y)
         svr_preds = svr.predict(x)
 
-        # CART
+        # --- CART ---
+        x = x_pred_cart.reshape(-1, 1)
         cart = DecisionTreeRegressor(max_depth=max_depth)
         cart.fit(x, y)
         cart_preds = cart.predict(x)
 
-        # Save predictions
         col_name = path[i]
         predictions[f"{col_name}_loess"] = loess_preds
         predictions[f"{col_name}_svr"] = svr_preds
         predictions[f"{col_name}_cart"] = cart_preds
 
-        # Compute metrics
+        # Chyby
         edge = (path[i - 1], path[i])
-        # # Pointwise sMAPE
-        # smape_series_loess = pointwise_smape(y, loess_preds)
-        # smape_series_svr = pointwise_smape(y, svr_preds)
-        # smape_series_cart = pointwise_smape(y, cart_preds)
-
         error_metrics[edge] = {
             "rmse": [
                 np.sqrt(np.mean((y - loess_preds) ** 2)),
@@ -68,7 +67,9 @@ def multi_model_chain_predict(df, path, frac=0.3, max_depth=5):
             ],
         }
 
-        x_pred = loess_preds
+        x_pred_loess = loess_preds
+        x_pred_svr = svr_preds
+        x_pred_cart = cart_preds
 
     df_result = df.copy()
     for key, val in predictions.items():
